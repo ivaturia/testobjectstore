@@ -1,0 +1,22 @@
+[
+  {
+    "name": "user1",
+    "userId": 111,
+    "token": "121-456-345"
+  },
+  {
+    "name": "user2",
+    "userId": 777,
+    "token": "777-456-3223"
+  },
+  {
+    "name": "user2",
+    "userId": 444,
+    "token": "234-456-3223"
+  },
+  {
+    "name": "user3",
+    "userId": 555,
+    "token": "345-456-789"
+  }
+]

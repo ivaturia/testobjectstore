@@ -16,12 +16,28 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 	<objectstore:config name="userObjectStoreConfiguration"
 		partition="user" persistent="true" doc:name="ObjectStore: Connector"
 		objectStore-ref="_defaultUserObjectStore" />
-	<flow name="storeObjectStoreDataWithKeyValuePairs">
-        <http:listener config-ref="httpListenerConfiguration" path="/users" allowedMethods="GET" doc:name="HTTP: Listener to accept user requests"/>
-        <set-payload value="#[[{'userId':111, 'name':'user1','token':'121-456-345'}, {'userId':444, 'name':'user2','token':'234-456-3223'}, {'userId':555, 'name':'user3','token':'345-456-789'}]]" doc:name="Set Payload: Sets payload with key value pairs"/>
-        <foreach collection="#[message.payload]" doc:name="For Each: Iterate thru the hashmap">
-            <objectstore:store config-ref="userObjectStoreConfiguration" key="#[payload.userId]" value-ref="#[payload.name+payload.token]" overwrite="true" doc:name="ObjectStore: Store key value pairs"/>
+	<flow name="storeObjectStoreDataWithKeyValuePairs" >
+        <http:listener config-ref="httpListenerConfiguration" path="/users" allowedMethods="POST" doc:name="HTTP: Listener to accept user requests"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="22af2a22-f9d0-4956-8512-67ae45620a58">
+            <dw:input-payload mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload map ((payload01 , indexOfPayload01) -> {
+	userId: payload01.userId as :string,
+	name: payload01.name,
+	token: payload01.token
+})]]></dw:set-payload>
+        </dw:transform-message>
+        <!-- <foreach collection="#[message.payload]" doc:name="For Each">
+            <logger message="#[payload.userId] : #[payload.name+payload.token]" level="INFO" doc:name="Logger"/>
         </foreach>
+        <set-payload value="#[[{'userId':111, 'name':'user1','token':'121-456-345'}, {'userId':777, 'name':'user2','token':'777-456-3223'}, {'userId':444, 'name':'user2','token':'234-456-3223'}, {'userId':555, 'name':'user3','token':'345-456-789'}]]" doc:name="Set Payload: Sets payload with key value pairs"/>
+         -->
+        <foreach collection="#[message.payload]" doc:name="For Each: Iterate thru the hashmap">
+         
+            <objectstore:store config-ref="userObjectStoreConfiguration" key="#[payload.userId]" value-ref="#[payload.name+payload.token]" overwrite="true" doc:name="ObjectStore: Store key value pairs"/>
+        </foreach> 
         <dw:transform-message doc:name="Flatten the payload to json format">
             <dw:set-payload><![CDATA[%dw 1.0
 %output application/json
