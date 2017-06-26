@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/objectstore http://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+	<http:listener-config name="httpListenerConfiguration"
+		host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration" />
+	<objectstore:config name="userObjectStoreConfiguration"
+		partition="user" persistent="true" doc:name="ObjectStore: Connector"
+		objectStore-ref="_defaultUserObjectStore" />
+	<flow name="storeObjectStoreDataWithKeyValuePairs">
+        <http:listener config-ref="httpListenerConfiguration" path="/users" allowedMethods="GET" doc:name="HTTP: Listener to accept user requests"/>
+        <set-payload value="#[[{'userId':111, 'name':'user1','token':'121-456-345'}, {'userId':444, 'name':'user2','token':'234-456-3223'}, {'userId':555, 'name':'user3','token':'345-456-789'}]]" doc:name="Set Payload: Sets payload with key value pairs"/>
+        <foreach collection="#[message.payload]" doc:name="For Each: Iterate thru the hashmap">
+            <objectstore:store config-ref="userObjectStoreConfiguration" key="#[payload.userId]" value-ref="#[payload.name+payload.token]" overwrite="true" doc:name="ObjectStore: Store key value pairs"/>
+        </foreach>
+        <dw:transform-message doc:name="Flatten the payload to json format">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+flatten payload]]></dw:set-payload>
+        </dw:transform-message>
+		<logger level="INFO" doc:name="Logger: Log the response" />
+		<catch-exception-strategy doc:name="Catch Exception Strategy">
+			<logger level="INFO" doc:name="Logger: Log the exception" />
+		</catch-exception-strategy>
+	</flow>
+	<flow name="retrieveObjectStoreWithKeyValueBasedOnuserId">
+		<http:listener config-ref="httpListenerConfiguration"
+			path="/users/{userId}" doc:name="HTTP: Retrieve token value based on userId resource parameter" allowedMethods="GET"/>
+        <logger message="#[message.inboundProperties.'http.uri.params'.userId]" level="INFO" doc:name="Logger: Log the userId parameter to check the value recieved"/>
+        <set-variable variableName="userId" value="#[message.inboundProperties.'http.uri.params'.userId]" doc:name="Variable: Store the UserId"/>
+
+		<objectstore:retrieve config-ref="userObjectStoreConfiguration"
+			 doc:name="ObjectStore: Key Value pairs" key="#[message.inboundProperties.'http.uri.params'.userId]"/>
+
+		<logger message="#[payload]" level="INFO"
+			doc:name="Logger: Log the payload" />
+		<echo-component doc:name="Echo" />
+        <exception-strategy ref="commonExceptionStrategy" doc:name="Reference Exception Strategy"/>
+	</flow>
+    <catch-exception-strategy name="commonExceptionStrategy">
+        <logger message="No record found for the userId :#[flowVars.userId]" level="INFO" doc:name="Logger"/>
+        <set-payload value="No record found for the userId :#[flowVars.userId]" doc:name="Set Payload"/>
+    </catch-exception-strategy>
+    <flow name="deleteObjectStoreEntryBasedOnuserId">
+        <http:listener config-ref="httpListenerConfiguration" path="/users/delete/{userId}" allowedMethods="GET" doc:name="HTTP"/>
+        <logger message="#[message.inboundProperties.'http.uri.params'.userId]" level="INFO" doc:name="Logger"/>
+        <set-variable variableName="userId" value="#[message.inboundProperties.'http.uri.params'.userId]" doc:name="Variable"/>
+        <objectstore:remove config-ref="userObjectStoreConfiguration" key="#[message.inboundProperties.'http.uri.params'.userId]" doc:name="ObjectStore"/>
+        <objectstore:retrieve-all-keys config-ref="userObjectStoreConfiguration" doc:name="ObjectStore"/>
+        <set-payload value="Successfully removed user: #[message.inboundProperties.'http.uri.params'.userId] and remaining keys are #[payload]" doc:name="Set Payload"/>
+        <exception-strategy ref="commonExceptionStrategy" doc:name="Reference Exception Strategy"/>
+    </flow>
+</mule>
